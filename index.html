@@ -1,93 +1,169 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Design Tokens</title>
-  <style>
-    body {
-      font-family: system-ui;
-      padding: 40px;
-      background: #fafafa;
-    }
+<meta charset="UTF-8">
+<title>Design System Tokens</title>
 
-    h1 {
-      margin-bottom: 32px;
-    }
+<style>
+body {
+  font-family: system-ui;
+  padding: 40px;
+  background: #f5f6f8;
+}
 
-    .token {
-      display: flex;
-      align-items: center;
-      margin-bottom: 12px;
-      padding: 8px;
-      background: white;
-      border-radius: 6px;
-      border: 1px solid #eee;
-    }
+h1 {
+  margin-bottom: 24px;
+}
 
-    .swatch {
-      width: 32px;
-      height: 32px;
-      margin-right: 16px;
-      border-radius: 4px;
-      border: 1px solid #ddd;
-    }
+.controls {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 32px;
+}
 
-    .name {
-      font-weight: 600;
-      margin-right: 12px;
-    }
+input, select {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  font-size: 14px;
+}
 
-    .value {
-      color: #555;
-      font-family: monospace;
-    }
-  </style>
+.token {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.token-name {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.token-meta {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  margin-bottom: 8px;
+}
+
+.alias {
+  font-size: 12px;
+  color: #999;
+  margin-top: 6px;
+}
+
+.typography-preview {
+  margin-top: 8px;
+}
+</style>
 </head>
+
 <body>
 
-<h1>Design Tokens</h1>
+<h1>Design System Tokens</h1>
+
+<div class="controls">
+  <input type="text" id="search" placeholder="Search tokens..." />
+  
+  <select id="tierFilter">
+    <option value="all">All tiers</option>
+    <option value="core">Core</option>
+    <option value="semantic">Semantic</option>
+    <option value="component">Component</option>
+  </select>
+</div>
+
 <div id="tokens"></div>
 
 <script>
 fetch('./tokens.json')
-  .then(res => res.json())
-  .then(data => {
+.then(res => res.json())
+.then(data => {
 
-    const container = document.getElementById('tokens');
+  const container = document.getElementById('tokens');
+  const searchInput = document.getElementById('search');
+  const tierFilter = document.getElementById('tierFilter');
 
-    function flatten(obj, prefix = '') {
-      return Object.entries(obj).reduce((acc, [key, value]) => {
-        const newKey = prefix ? prefix + '.' + key : key;
+  function flatten(obj, prefix = '') {
+    return Object.entries(obj).reduce((acc, [key, value]) => {
+      const newKey = prefix ? prefix + '.' + key : key;
 
-        if (typeof value === 'object' && value.value === undefined) {
-          Object.assign(acc, flatten(value, newKey));
-        } else {
-          acc[newKey] = value.value || value;
-        }
+      if (typeof value === 'object' && value.value === undefined) {
+        Object.assign(acc, flatten(value, newKey));
+      } else {
+        acc[newKey] = value;
+      }
 
-        return acc;
-      }, {});
-    }
+      return acc;
+    }, {});
+  }
 
-    const flat = flatten(data);
+  const flat = flatten(data);
 
-    Object.entries(flat).forEach(([name, value]) => {
+  function detectTier(name) {
+    if (name.startsWith('core.')) return 'core';
+    if (name.startsWith('semantic.')) return 'semantic';
+    if (name.startsWith('component.')) return 'component';
+    return 'unknown';
+  }
+
+  function render() {
+    container.innerHTML = '';
+
+    const search = searchInput.value.toLowerCase();
+    const tier = tierFilter.value;
+
+    Object.entries(flat).forEach(([name, token]) => {
+
+      const value = token.value || token;
+      const alias = typeof value === 'string' && value.startsWith('{') ? value : null;
+      const resolvedValue = alias ? null : value;
+
+      const tokenTier = detectTier(name);
+
+      if (tier !== 'all' && tokenTier !== tier) return;
+      if (!name.toLowerCase().includes(search)) return;
 
       const div = document.createElement('div');
       div.className = 'token';
 
-      const isColor = /^#|rgb|hsl/.test(value);
+      const isColor = /^#|rgb|hsl/.test(resolvedValue);
+      const isFontSize = name.includes('font') || name.includes('size');
 
       div.innerHTML = `
-        ${isColor ? `<div class="swatch" style="background:${value}"></div>` : `<div style="width:32px;margin-right:16px;"></div>`}
-        <div class="name">${name}</div>
-        <div class="value">${value}</div>
+        <div class="token-name">${name}</div>
+        <div class="token-meta">Tier: ${tokenTier}</div>
+        
+        ${isColor && resolvedValue ? `<div class="swatch" style="background:${resolvedValue}"></div>` : ''}
+        
+        <div><strong>Value:</strong> ${resolvedValue || alias}</div>
+        
+        ${alias ? `<div class="alias">Alias → ${alias}</div>` : ''}
+        
+        ${isFontSize && resolvedValue ? `
+          <div class="typography-preview" style="font-size:${resolvedValue}">
+            The quick brown fox jumps over the lazy dog
+          </div>` : ''}
       `;
 
       container.appendChild(div);
     });
+  }
 
-  });
+  searchInput.addEventListener('input', render);
+  tierFilter.addEventListener('change', render);
+
+  render();
+});
 </script>
 
 </body>
