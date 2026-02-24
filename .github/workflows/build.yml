@@ -16,7 +16,7 @@ jobs:
           node-version: 18
 
       - run: cd token-docs && npm install
-      - run: cd token-docs && npx style-dictionary build --config style-dictionary.config.js
+      - run: cd token-docs && npm run build
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
