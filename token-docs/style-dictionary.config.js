@@ -1,17 +1,21 @@
-const StyleDictionary = require('style-dictionary');
+const fs = require('fs');
+const path = require('path');
+
+// Read metadata file
+const metadata = JSON.parse(
+  fs.readFileSync(path.resolve(__dirname, '../tokens/$metadata.json'), 'utf8')
+);
+
+// Convert tokenSetOrder into file paths
+const tokenSources = metadata.tokenSetOrder.map(setName => {
+  return `tokens/${setName}.json`;
+});
 
 module.exports = {
-  source: [
-    'tokens/base/core.json',
-    'tokens/base/semantic.json',
-    'tokens/base/component.json',
-    'tokens/web/core.json',
-    'tokens/web/semantic.json',
-    'tokens/web/component.json'
-  ],
+  source: tokenSources,
   platforms: {
     docs: {
-      transforms: [], // important: do not transform
+      transforms: [],
       buildPath: 'token-docs/build/',
       files: [
         {
