@@ -11,9 +11,7 @@ body {
   background: #f5f6f8;
 }
 
-h1 {
-  margin-bottom: 24px;
-}
+h1 { margin-bottom: 24px; }
 
 .controls {
   display: flex;
@@ -55,10 +53,11 @@ input, select {
   margin-bottom: 8px;
 }
 
-.alias {
+.alias-chain {
   font-size: 12px;
-  color: #999;
+  color: #888;
   margin-top: 6px;
+  font-family: monospace;
 }
 
 .typography-preview {
@@ -93,14 +92,22 @@ fetch('./tokens.json')
   const searchInput = document.getElementById('search');
   const tierFilter = document.getElementById('tierFilter');
 
-  function flatten(obj, prefix = '') {
+  function flatten(obj, prefix = '', tier = null) {
     return Object.entries(obj).reduce((acc, [key, value]) => {
       const newKey = prefix ? prefix + '.' + key : key;
 
-      if (typeof value === 'object' && value.value === undefined) {
-        Object.assign(acc, flatten(value, newKey));
-      } else {
-        acc[newKey] = value;
+      // Detect tier at top level
+      if (!tier && (key === 'core' || key === 'semantic' || key === 'component')) {
+        Object.assign(acc, flatten(value, key, key));
+      } 
+      else if (typeof value === 'object' && value.value === undefined) {
+        Object.assign(acc, flatten(value, newKey, tier));
+      } 
+      else {
+        acc[newKey] = {
+          value: value.value || value,
+          tier: tier
+        };
       }
 
       return acc;
@@ -109,11 +116,19 @@ fetch('./tokens.json')
 
   const flat = flatten(data);
 
-  function detectTier(name) {
-    if (name.startsWith('core.')) return 'core';
-    if (name.startsWith('semantic.')) return 'semantic';
-    if (name.startsWith('component.')) return 'component';
-    return 'unknown';
+  function resolveAlias(name, chain = []) {
+    const token = flat[name];
+    if (!token) return chain;
+
+    const value = token.value;
+
+    if (typeof value === 'string' && value.startsWith('{')) {
+      const clean = value.replace(/[{}]/g, '');
+      chain.push(clean);
+      return resolveAlias(clean, chain);
+    }
+
+    return chain;
   }
 
   function render() {
@@ -124,14 +139,17 @@ fetch('./tokens.json')
 
     Object.entries(flat).forEach(([name, token]) => {
 
-      const value = token.value || token;
-      const alias = typeof value === 'string' && value.startsWith('{') ? value : null;
-      const resolvedValue = alias ? null : value;
-
-      const tokenTier = detectTier(name);
-
-      if (tier !== 'all' && tokenTier !== tier) return;
+      if (tier !== 'all' && token.tier !== tier) return;
       if (!name.toLowerCase().includes(search)) return;
+
+      const value = token.value;
+      const aliasChain = resolveAlias(name);
+
+      let resolvedValue = value;
+      if (aliasChain.length) {
+        const final = flat[aliasChain[aliasChain.length - 1]];
+        if (final) resolvedValue = final.value;
+      }
 
       const div = document.createElement('div');
       div.className = 'token';
@@ -141,15 +159,18 @@ fetch('./tokens.json')
 
       div.innerHTML = `
         <div class="token-name">${name}</div>
-        <div class="token-meta">Tier: ${tokenTier}</div>
+        <div class="token-meta">Tier: ${token.tier || 'unknown'}</div>
         
-        ${isColor && resolvedValue ? `<div class="swatch" style="background:${resolvedValue}"></div>` : ''}
+        ${isColor ? `<div class="swatch" style="background:${resolvedValue}"></div>` : ''}
         
-        <div><strong>Value:</strong> ${resolvedValue || alias}</div>
+        <div><strong>Value:</strong> ${resolvedValue}</div>
         
-        ${alias ? `<div class="alias">Alias → ${alias}</div>` : ''}
+        ${aliasChain.length ? `
+          <div class="alias-chain">
+            Alias chain → ${aliasChain.join(' → ')}
+          </div>` : ''}
         
-        ${isFontSize && resolvedValue ? `
+        ${isFontSize ? `
           <div class="typography-preview" style="font-size:${resolvedValue}">
             The quick brown fox jumps over the lazy dog
           </div>` : ''}
