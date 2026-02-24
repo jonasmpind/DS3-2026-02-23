@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Design System Tokens</title>
+<title>Design System Portal</title>
 
 <style>
 body {
@@ -17,13 +17,13 @@ h1 { margin-bottom: 24px; }
   display: flex;
   gap: 16px;
   margin-bottom: 32px;
+  align-items: center;
 }
 
-input, select {
+select, input {
   padding: 8px 12px;
   border-radius: 6px;
   border: 1px solid #ddd;
-  font-size: 14px;
 }
 
 .token {
@@ -34,51 +34,49 @@ input, select {
   border: 1px solid #e5e7eb;
 }
 
-.token-name {
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.token-meta {
+.meta {
   font-size: 12px;
   color: #666;
   margin-bottom: 8px;
+}
+
+.alias {
+  font-family: monospace;
+  font-size: 12px;
+  color: #888;
+  margin-top: 6px;
 }
 
 .swatch {
   width: 32px;
   height: 32px;
   border-radius: 6px;
-  border: 1px solid #ddd;
   margin-bottom: 8px;
-}
-
-.alias-chain {
-  font-size: 12px;
-  color: #888;
-  margin-top: 6px;
-  font-family: monospace;
-}
-
-.typography-preview {
-  margin-top: 8px;
+  border:1px solid #ddd;
 }
 </style>
 </head>
 
 <body>
 
-<h1>Design System Tokens</h1>
+<h1>Design System Portal</h1>
 
 <div class="controls">
-  <input type="text" id="search" placeholder="Search tokens..." />
-  
-  <select id="tierFilter">
-    <option value="all">All tiers</option>
-    <option value="core">Core</option>
-    <option value="semantic">Semantic</option>
-    <option value="component">Component</option>
-  </select>
+
+<select id="platform">
+  <option value="base">Base</option>
+  <option value="web">Web</option>
+</select>
+
+<select id="tier" multiple size="4">
+  <option value="all" selected>All tiers</option>
+  <option value="core">Core</option>
+  <option value="semantic">Semantic</option>
+  <option value="component">Component</option>
+</select>
+
+<input id="search" placeholder="Search..." />
+
 </div>
 
 <div id="tokens"></div>
@@ -88,102 +86,112 @@ fetch('./tokens.json')
 .then(res => res.json())
 .then(data => {
 
-  const container = document.getElementById('tokens');
-  const searchInput = document.getElementById('search');
-  const tierFilter = document.getElementById('tierFilter');
+const container = document.getElementById('tokens');
+const platformSelect = document.getElementById('platform');
+const tierSelect = document.getElementById('tier');
+const searchInput = document.getElementById('search');
 
-  function flatten(obj, prefix = '', tier = null) {
-    return Object.entries(obj).reduce((acc, [key, value]) => {
-      const newKey = prefix ? prefix + '.' + key : key;
+function flatten(obj, path=[], platform=null, tier=null) {
+  let result = {};
 
-      // Detect tier at top level
-      if (!tier && (key === 'core' || key === 'semantic' || key === 'component')) {
-        Object.assign(acc, flatten(value, key, key));
-      } 
-      else if (typeof value === 'object' && value.value === undefined) {
-        Object.assign(acc, flatten(value, newKey, tier));
-      } 
-      else {
-        acc[newKey] = {
-          value: value.value || value,
-          tier: tier
-        };
-      }
+  Object.entries(obj).forEach(([key, value]) => {
 
-      return acc;
-    }, {});
-  }
-
-  const flat = flatten(data);
-
-  function resolveAlias(name, chain = []) {
-    const token = flat[name];
-    if (!token) return chain;
-
-    const value = token.value;
-
-    if (typeof value === 'string' && value.startsWith('{')) {
-      const clean = value.replace(/[{}]/g, '');
-      chain.push(clean);
-      return resolveAlias(clean, chain);
+    if (key === 'base' || key === 'web') {
+      Object.assign(result, flatten(value, path, key, tier));
+    }
+    else if (key.includes('core')) {
+      Object.assign(result, flatten(value, path, platform, 'core'));
+    }
+    else if (key.includes('semantic')) {
+      Object.assign(result, flatten(value, path, platform, 'semantic'));
+    }
+    else if (key.includes('component')) {
+      Object.assign(result, flatten(value, path, platform, 'component'));
+    }
+    else if (value.$value !== undefined) {
+      result[path.concat(key).join('.')] = {
+        ...value,
+        platform,
+        tier
+      };
+    }
+    else if (typeof value === 'object') {
+      Object.assign(result, flatten(value, path.concat(key), platform, tier));
     }
 
-    return chain;
+  });
+
+  return result;
+}
+
+const flat = flatten(data);
+
+function resolveAlias(value, chain=[]) {
+  if (!value || !value.startsWith('{')) return chain;
+
+  const clean = value.replace(/[{}]/g,'');
+  chain.push(clean);
+
+  const next = flat[clean];
+  if (next) return resolveAlias(next.$value, chain);
+
+  return chain;
+}
+
+function getSelectedTiers() {
+  const selected = Array.from(tierSelect.selectedOptions).map(o => o.value);
+
+  if (selected.includes('all')) {
+    return ['core','semantic','component'];
   }
 
-  function render() {
-    container.innerHTML = '';
+  return selected;
+}
 
-    const search = searchInput.value.toLowerCase();
-    const tier = tierFilter.value;
+function render() {
+  container.innerHTML='';
 
-    Object.entries(flat).forEach(([name, token]) => {
+  const platform = platformSelect.value;
+  const tiers = getSelectedTiers();
+  const search = searchInput.value.toLowerCase();
 
-      if (tier !== 'all' && token.tier !== tier) return;
-      if (!name.toLowerCase().includes(search)) return;
+  Object.entries(flat).forEach(([name, token]) => {
 
-      const value = token.value;
-      const aliasChain = resolveAlias(name);
+    if (token.platform !== platform) return;
+    if (!tiers.includes(token.tier)) return;
+    if (!name.toLowerCase().includes(search)) return;
 
-      let resolvedValue = value;
-      if (aliasChain.length) {
-        const final = flat[aliasChain[aliasChain.length - 1]];
-        if (final) resolvedValue = final.value;
-      }
+    const aliasChain = resolveAlias(token.$value, []);
+    let finalValue = token.$value;
 
-      const div = document.createElement('div');
-      div.className = 'token';
+    if (aliasChain.length) {
+      const last = flat[aliasChain[aliasChain.length -1]];
+      if (last) finalValue = last.$value;
+    }
 
-      const isColor = /^#|rgb|hsl/.test(resolvedValue);
-      const isFontSize = name.includes('font') || name.includes('size');
+    const div = document.createElement('div');
+    div.className='token';
 
-      div.innerHTML = `
-        <div class="token-name">${name}</div>
-        <div class="token-meta">Tier: ${token.tier || 'unknown'}</div>
-        
-        ${isColor ? `<div class="swatch" style="background:${resolvedValue}"></div>` : ''}
-        
-        <div><strong>Value:</strong> ${resolvedValue}</div>
-        
-        ${aliasChain.length ? `
-          <div class="alias-chain">
-            Alias chain → ${aliasChain.join(' → ')}
-          </div>` : ''}
-        
-        ${isFontSize ? `
-          <div class="typography-preview" style="font-size:${resolvedValue}">
-            The quick brown fox jumps over the lazy dog
-          </div>` : ''}
-      `;
+    const isColor = /^#/.test(finalValue);
 
-      container.appendChild(div);
-    });
-  }
+    div.innerHTML=`
+      <div><strong>${name}</strong></div>
+      <div class="meta">${token.platform} → ${token.tier}</div>
+      ${isColor ? `<div class="swatch" style="background:${finalValue}"></div>`:''}
+      <div>Value: ${finalValue}</div>
+      ${aliasChain.length ? `<div class="alias">Alias chain → ${aliasChain.join(' → ')}</div>`:''}
+    `;
 
-  searchInput.addEventListener('input', render);
-  tierFilter.addEventListener('change', render);
+    container.appendChild(div);
+  });
+}
 
-  render();
+platformSelect.addEventListener('change', render);
+tierSelect.addEventListener('change', render);
+searchInput.addEventListener('input', render);
+
+render();
+
 });
 </script>
 
