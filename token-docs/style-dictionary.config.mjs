@@ -1,32 +1,31 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import StyleDictionary from "style-dictionary";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Enable DTCG mode
-StyleDictionary.registerParser({
-  pattern: /\.json$/,
-  parse: ({ contents }) => JSON.parse(contents)
-});
-
-// Read metadata
+// Read Tokens Studio metadata
 const metadataPath = path.resolve(__dirname, "../tokens/$metadata.json");
+
+if (!fs.existsSync(metadataPath)) {
+  throw new Error("Cannot find tokens/$metadata.json");
+}
+
 const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
 
 const tokenSources = metadata.tokenSetOrder.map(
   (setName) => `tokens/${setName}.json`
 );
 
+console.log("Building from token sets:");
+console.log(tokenSources);
+
 export default {
   source: tokenSources,
 
-  // 🔥 THIS IS THE IMPORTANT PART
-  hooks: {
-    preprocessors: ["dtcg"]
-  },
+  // ✅ THIS enables $value / $type (DTCG support)
+  usesDtcg: true,
 
   platforms: {
     docs: {
