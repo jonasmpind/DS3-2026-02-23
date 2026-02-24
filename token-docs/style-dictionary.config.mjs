@@ -5,14 +5,22 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Read metadata
+// Read Tokens Studio metadata
 const metadataPath = path.resolve(__dirname, "../tokens/$metadata.json");
+
+if (!fs.existsSync(metadataPath)) {
+  throw new Error("❌ Cannot find tokens/$metadata.json");
+}
+
 const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
 
 // Convert tokenSetOrder into file paths
 const tokenSources = metadata.tokenSetOrder.map(
   (setName) => `tokens/${setName}.json`
 );
+
+console.log("Building from token sets:");
+console.log(tokenSources);
 
 export default {
   source: tokenSources,
@@ -23,9 +31,9 @@ export default {
       files: [
         {
           destination: "tokens.json",
-          format: "json/nested",
-        },
-      ],
-    },
-  },
+          format: "json/nested"
+        }
+      ]
+    }
+  }
 };
