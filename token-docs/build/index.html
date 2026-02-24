@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Design Tokens</title>
+  <style>
+    body {
+      font-family: system-ui;
+      padding: 40px;
+      background: #fafafa;
+    }
+
+    h1 {
+      margin-bottom: 32px;
+    }
+
+    .token {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+      padding: 8px;
+      background: white;
+      border-radius: 6px;
+      border: 1px solid #eee;
+    }
+
+    .swatch {
+      width: 32px;
+      height: 32px;
+      margin-right: 16px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+    }
+
+    .name {
+      font-weight: 600;
+      margin-right: 12px;
+    }
+
+    .value {
+      color: #555;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Design Tokens</h1>
+<div id="tokens"></div>
+
+<script>
+fetch('./tokens.json')
+  .then(res => res.json())
+  .then(data => {
+
+    const container = document.getElementById('tokens');
+
+    function flatten(obj, prefix = '') {
+      return Object.entries(obj).reduce((acc, [key, value]) => {
+        const newKey = prefix ? prefix + '.' + key : key;
+
+        if (typeof value === 'object' && value.value === undefined) {
+          Object.assign(acc, flatten(value, newKey));
+        } else {
+          acc[newKey] = value.value || value;
+        }
+
+        return acc;
+      }, {});
+    }
+
+    const flat = flatten(data);
+
+    Object.entries(flat).forEach(([name, value]) => {
+
+      const div = document.createElement('div');
+      div.className = 'token';
+
+      const isColor = /^#|rgb|hsl/.test(value);
+
+      div.innerHTML = `
+        ${isColor ? `<div class="swatch" style="background:${value}"></div>` : `<div style="width:32px;margin-right:16px;"></div>`}
+        <div class="name">${name}</div>
+        <div class="value">${value}</div>
+      `;
+
+      container.appendChild(div);
+    });
+
+  });
+</script>
+
+</body>
+</html>
